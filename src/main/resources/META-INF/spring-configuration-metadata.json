@@ -1,0 +1,26 @@
+{
+  "groups": [
+    {
+      "name": "app.security",
+      "type": "io.github.mrpotatosse.core.SecurityProperties",
+      "sourceType": "io.github.mrpotatosse.core.SecurityProperties"
+    },
+    {
+      "name": "app.core",
+      "type": "io.github.mrpotatosse.core.CoreProperties",
+      "sourceType": "io.github.mrpotatosse.core.CoreProperties"
+    }
+  ],
+  "properties": [
+    {
+      "name": "app.security.allowed-origins",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Allowed CORS origins for the security module."
+    },
+    {
+      "name": "app.core.reference-manager-role",
+      "type": "java.lang.String",
+      "description": "Role used to allow reference management."
+    }
+  ]
+}
