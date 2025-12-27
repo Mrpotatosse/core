@@ -3,6 +3,8 @@ package io.github.mrpotatosse.core.controllers;
 import io.github.mrpotatosse.core.annotations.controllers.Reference;
 import io.github.mrpotatosse.core.annotations.controllers.RestDisabled;
 import io.github.mrpotatosse.core.entities.CoreReferenceEntity;
+import io.github.mrpotatosse.core.projections.ReferenceColumnProjection;
+import io.github.mrpotatosse.core.projections.ReferencePropertyProjection;
 import io.github.mrpotatosse.core.repositories.CoreRepository;
 import io.github.mrpotatosse.core.services.CoreService;
 import io.github.mrpotatosse.core.utils.CriteriaUtil;
@@ -17,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collection;
 import java.util.Map;
 
 @RequiredArgsConstructor
@@ -42,9 +45,18 @@ public class CoreReferenceController<
 
     @RestDisabled(condition = "@referenceUtil.checkIfIgnoredMethodExists(#target, 'GET')")
     @GetMapping
-    public ResponseEntity<Page<?>> get(Pageable pageable) {
+    public ResponseEntity<Page<?>> get(Pageable pageable,
+                                       @RequestParam(name = "searchValue", defaultValue = "") String searchValue,
+                                       @RequestParam(name = "ids", defaultValue = "") Long[] ids) {
         return ResponseEntity.ok(coreService
-                .getAll(getRepository(), criteriaUtil.all(), pageable, getReference().output()));
+                .getAll(getRepository(),
+                        criteriaUtil.all(),
+                        pageable,
+                        getReference().output(),
+                        referenceUtil.getReferenceInput(this),
+                        searchValue,
+                        "id",
+                        ids));
     }
 
     @RestDisabled(condition = "@referenceUtil.checkIfIgnoredMethodExists(#target, 'GET')")
@@ -87,5 +99,38 @@ public class CoreReferenceController<
     public ResponseEntity<Void> delete(@PathVariable("id") Long id) {
         coreService.delete(getRepository(), id);
         return ResponseEntity.noContent().build();
+    }
+
+    @RestDisabled(condition = "@referenceUtil.checkIfIgnoredMethodExists(#target, 'GET')")
+    @GetMapping("table/default")
+    @PreAuthorize("hasRole(@roleUtil.referenceManagerRole)")
+    public ResponseEntity<?> getDefaultInstance() {
+        return ResponseEntity.ok(coreService
+                .defaultInstance(referenceUtil
+                        .getReferenceInput(this), getReference().output()));
+    }
+
+    @RestDisabled(condition = "@referenceUtil.checkIfIgnoredMethodExists(#target, 'GET')")
+    @GetMapping("table/creation-properties")
+    @PreAuthorize("hasRole(@roleUtil.referenceManagerRole)")
+    public ResponseEntity<Collection<ReferencePropertyProjection>> getCreationProperties() {
+        return ResponseEntity.ok(coreService
+                .getCreationProperties(referenceUtil.getReferenceInput(this)));
+    }
+
+    @RestDisabled(condition = "@referenceUtil.checkIfIgnoredMethodExists(#target, 'GET')")
+    @GetMapping("table/modification-properties")
+    @PreAuthorize("hasRole(@roleUtil.referenceManagerRole)")
+    public ResponseEntity<Collection<ReferencePropertyProjection>> getModificationProperties() {
+        return ResponseEntity.ok(coreService
+                .getModificationProperties(referenceUtil.getReferenceInput(this)));
+    }
+
+    @RestDisabled(condition = "@referenceUtil.checkIfIgnoredMethodExists(#target, 'GET')")
+    @GetMapping("table/columns")
+    @PreAuthorize("hasRole(@roleUtil.referenceManagerRole)")
+    public ResponseEntity<Collection<ReferenceColumnProjection>> getColumns() {
+        return ResponseEntity.ok(coreService
+                .getReferenceColumns(referenceUtil.getReferenceInput(this)));
     }
 }

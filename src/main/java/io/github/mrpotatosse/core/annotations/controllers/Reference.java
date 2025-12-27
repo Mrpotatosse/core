@@ -16,4 +16,6 @@ public @interface Reference {
      * @return the disabled methods.
      */
     RequestMethod[] disabledMethods() default {};
+
+    String discovery() default "";
 }

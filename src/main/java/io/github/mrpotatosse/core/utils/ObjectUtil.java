@@ -1,5 +1,7 @@
 package io.github.mrpotatosse.core.utils;
 
+import io.github.mrpotatosse.core.annotations.controllers.RetrieveWith;
+import io.github.mrpotatosse.core.resolvers.AllBeanResolver;
 import io.github.mrpotatosse.core.resolvers.ExposedBeanResolver;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -13,8 +15,12 @@ import org.springframework.util.ReflectionUtils;
 import java.io.Serializable;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -23,6 +29,8 @@ public class ObjectUtil {
     private final ExpressionParser parser;
     @NonNull
     private final ExposedBeanResolver exposedBeanResolver;
+    @NonNull
+    private final AllBeanResolver allBeanResolver;
 
     public <T extends Serializable, A extends Annotation>
     T modify(T source, String fieldName, Object value, Class<A> disableAnnotation) {
@@ -41,7 +49,14 @@ public class ObjectUtil {
             throw new IllegalArgumentException("Field '" + fieldName + "' modification is disabled");
 
         Expression exp = parser.parseExpression(fieldName);
-        if (value instanceof String strValue) {
+
+        if (field.getAnnotation(RetrieveWith.class) instanceof RetrieveWith retrieveWith) {
+            StandardEvaluationContext fullContext = new StandardEvaluationContext();
+            fullContext.setRootObject(output);
+            fullContext.setBeanResolver(allBeanResolver);
+            fullContext.setVariable("value", value);
+            exp.setValue(context, parser.parseExpression(retrieveWith.value()).getValue(fullContext));
+        } else if (value instanceof String strValue) {
             exp.setValue(context, field.getType().isAssignableFrom(String.class) ?
                     strValue : parser.parseExpression(strValue).getValue(context));
         } else {
@@ -62,5 +77,23 @@ public class ObjectUtil {
     public <A extends Annotation> A getAnnotation(Object source, Class<A> annotation) {
         return source.getClass().isAnnotationPresent(annotation) ?
                 source.getClass().getAnnotation(annotation) : null;
+    }
+
+    public <T extends Serializable, A extends Annotation>
+    Set<Field> getNonAnnotatedProperties(Class<T> sourceClass, Class<A> annotation) {
+        Set<Field> fields = new HashSet<>();
+        ReflectionUtils.doWithFields(sourceClass, fields::add);
+        return fields.stream()
+                .filter(f -> !f.isAnnotationPresent(annotation) && !Modifier.isStatic(f.getModifiers()))
+                .collect(Collectors.toSet());
+    }
+
+    public <T extends Serializable, A extends Annotation>
+    Set<Field> getAnnotatedProperties(Class<T> sourceClass, Class<A> annotation) {
+        Set<Field> fields = new HashSet<>();
+        ReflectionUtils.doWithFields(sourceClass, fields::add);
+        return fields.stream()
+                .filter(f -> f.isAnnotationPresent(annotation) && !Modifier.isStatic(f.getModifiers()))
+                .collect(Collectors.toSet());
     }
 }
