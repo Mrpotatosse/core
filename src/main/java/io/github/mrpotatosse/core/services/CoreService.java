@@ -1,27 +1,36 @@
 package io.github.mrpotatosse.core.services;
 
+import io.github.mrpotatosse.core.annotations.controllers.ControllerHelper;
 import io.github.mrpotatosse.core.annotations.controllers.DisplayColumn;
 import io.github.mrpotatosse.core.annotations.controllers.FetchColumn;
-import io.github.mrpotatosse.core.annotations.controllers.Reference;
 import io.github.mrpotatosse.core.annotations.services.DisableCreation;
 import io.github.mrpotatosse.core.annotations.services.DisableModification;
-import io.github.mrpotatosse.core.entities.references.ReferenceColumn;
-import io.github.mrpotatosse.core.entities.references.ReferenceProperty;
+import io.github.mrpotatosse.core.controllers.projections.DiscoveryDataProjection;
+import io.github.mrpotatosse.core.controllers.projections.EntityPropertyProjection;
+import io.github.mrpotatosse.core.controllers.projections.TableColumnProjection;
+import io.github.mrpotatosse.core.entities.CoreDataEntity;
+import io.github.mrpotatosse.core.entities.helpers.DiscoveryData;
+import io.github.mrpotatosse.core.entities.helpers.EntityProperty;
+import io.github.mrpotatosse.core.entities.helpers.TableColumn;
+import io.github.mrpotatosse.core.enumerations.CoreEntityType;
 import io.github.mrpotatosse.core.exceptions.NotFoundException;
-import io.github.mrpotatosse.core.projections.ReferenceColumnProjection;
-import io.github.mrpotatosse.core.projections.ReferencePropertyProjection;
 import io.github.mrpotatosse.core.repositories.CoreRepository;
+import io.github.mrpotatosse.core.utils.ControllerUtil;
 import io.github.mrpotatosse.core.utils.CoreUtil;
 import io.github.mrpotatosse.core.utils.CriteriaUtil;
 import io.github.mrpotatosse.core.utils.ObjectUtil;
 import jakarta.validation.constraints.*;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.RequestMapping;
 
 import java.io.Serializable;
 import java.lang.reflect.Field;
@@ -41,6 +50,8 @@ public class CoreService {
     private final ObjectUtil objectUtil;
     @NonNull
     private final CriteriaUtil criteriaUtil;
+    @NonNull
+    private final ControllerUtil controllerUtil;
 
     public <ID extends Serializable,
             T,
@@ -136,15 +147,33 @@ public class CoreService {
     }
 
     public <ID extends Serializable,
+            T extends CoreDataEntity,
+            R extends CoreRepository<T, ID>>
+    T create(R repository, Class<T> instanceClass, final Map<String, Object> properties, Jwt user) {
+        T instance = objectUtil.modify(defaultInstance(instanceClass), properties, DisableCreation.class);
+        instance.setUserId(user.getSubject());
+        return save(repository, instance);
+    }
+
+    public <ID extends Serializable,
             T extends Serializable,
             R extends CoreRepository<T, ID>,
             O>
     O create(R repository, Class<T> instanceClass, final Map<String, Object> properties, Class<O> output) {
         return save(repository,
-                objectUtil.modify(defaultInstance(instanceClass),
-                        properties,
-                        DisableCreation.class),
+                objectUtil.modify(defaultInstance(instanceClass), properties, DisableCreation.class),
                 output);
+    }
+
+    public <ID extends Serializable,
+            T extends CoreDataEntity,
+            R extends CoreRepository<T, ID>,
+            O>
+    O create(R repository, Class<T> instanceClass, final Map<String, Object> properties, Class<O> output,
+             String userId) {
+        T instance = objectUtil.modify(defaultInstance(instanceClass), properties, DisableCreation.class);
+        instance.setUserId(userId);
+        return save(repository, instance, output);
     }
 
     public <ID extends Serializable,
@@ -178,57 +207,78 @@ public class CoreService {
         return coreUtil.transformer(output).apply(defaultInstance(instanceClass));
     }
 
-    public Collection<String> getReferencesBeanForDiscovery() {
-        return context.getBeansWithAnnotation(Reference.class)
+    public DiscoveryData getDiscoveryDataFromController(Object controller, CoreEntityType type, Jwt principal) {
+        Class<?> controllerClass = AopUtils.getTargetClass(controller);
+
+        if (!controllerUtil.hasRole(principal, controllerUtil.getRequiredRole(controller))) {
+            return null;
+        }
+
+        if (AnnotationUtils.findAnnotation(controllerClass, ControllerHelper.class) instanceof ControllerHelper ref
+                && ref.type().equals(type)) {
+            DiscoveryData.DiscoveryDataBuilder builder = DiscoveryData
+                    .builder()
+                    .type(ref.type())
+                    .name(ref.discovery());
+
+            if (AnnotationUtils.findAnnotation(controllerClass, RequestMapping.class) instanceof RequestMapping req) {
+                builder = builder.paths(req.value());
+            }
+            return builder.build();
+        }
+
+        return null;
+    }
+
+    public Collection<DiscoveryDataProjection> getBeanForDiscovery(CoreEntityType type, Jwt principal) {
+        return context.getBeansWithAnnotation(ControllerHelper.class)
                 .values()
                 .stream()
-                .map(o -> o
-                        .getClass()
-                        .getAnnotation(Reference.class) instanceof Reference ref ?
-                        ref.discovery() : "")
-                .filter(s -> s != null && !s.isBlank())
+                .map(o -> this.getDiscoveryDataFromController(o, type, principal))
+                .filter(Objects::nonNull)
+                .map(coreUtil.transformer(DiscoveryDataProjection.class))
                 .collect(Collectors.toList());
     }
 
     public <T extends Serializable>
-    Collection<ReferencePropertyProjection> getCreationProperties(Class<T> referenceClass) {
+    Collection<EntityPropertyProjection> getCreationProperties(Class<T> referenceClass) {
         return objectUtil.getNonAnnotatedProperties(referenceClass, DisableCreation.class)
                 .stream()
                 .map(this::transformFieldToProperty)
                 .filter(Objects::nonNull)
-                .map(coreUtil.transformer(ReferencePropertyProjection.class))
+                .map(coreUtil.transformer(EntityPropertyProjection.class))
                 .collect(Collectors.toSet());
     }
 
     public <T extends Serializable>
-    Collection<ReferencePropertyProjection> getModificationProperties(Class<T> referenceClass) {
+    Collection<EntityPropertyProjection> getModificationProperties(Class<T> referenceClass) {
         return objectUtil.getNonAnnotatedProperties(referenceClass, DisableModification.class)
                 .stream()
                 .map(this::transformFieldToProperty)
                 .filter(Objects::nonNull)
-                .map(coreUtil.transformer(ReferencePropertyProjection.class))
+                .map(coreUtil.transformer(EntityPropertyProjection.class))
                 .collect(Collectors.toSet());
     }
 
-    public ReferenceProperty transformFieldToProperty(Field field) {
-        ReferenceProperty.ReferencePropertyBuilder builder = ReferenceProperty.builder();
-        if (field.getAnnotation(DisplayColumn.class) instanceof DisplayColumn column) {
+    public EntityProperty transformFieldToProperty(Field field) {
+        EntityProperty.EntityPropertyBuilder builder = EntityProperty.builder();
+        if (AnnotationUtils.findAnnotation(field, DisplayColumn.class) instanceof DisplayColumn column) {
             builder = builder.order(column.order());
         } else {
             builder = builder.order(1000);
         }
 
-        if (field.getAnnotation(FetchColumn.class) instanceof FetchColumn column) {
+        if (AnnotationUtils.findAnnotation(field, FetchColumn.class) instanceof FetchColumn column) {
             builder = builder
                     .fetch(column.fetch().isBlank() ? null : column.fetch())
                     .fetchValueKey(column.fetchValueKey().isBlank() ? null : column.fetchValueKey())
                     .display(column.display().isBlank() ? null : column.display());
         }
 
-        if (field.getAnnotation(Min.class) instanceof Min min) {
+        if (AnnotationUtils.findAnnotation(field, Min.class) instanceof Min min) {
             builder = builder.min(min.value());
         }
-        if (field.getAnnotation(Max.class) instanceof Max max) {
+        if (AnnotationUtils.findAnnotation(field, Max.class) instanceof Max max) {
             builder = builder.max(max.value());
         }
 
@@ -241,9 +291,9 @@ public class CoreService {
                 .build();
     }
 
-    public ReferenceColumn transformFieldToColumn(Field field) {
-        ReferenceColumn.ReferenceColumnBuilder builder = ReferenceColumn.builder();
-        if (field.getAnnotation(DisplayColumn.class) instanceof DisplayColumn column) {
+    public TableColumn transformFieldToColumn(Field field) {
+        TableColumn.TableColumnBuilder builder = TableColumn.builder();
+        if (AnnotationUtils.findAnnotation(field, DisplayColumn.class) instanceof DisplayColumn column) {
             builder = builder
                     .order(column.order())
                     .searchable(column.searchable())
@@ -259,12 +309,12 @@ public class CoreService {
     }
 
     public <T extends Serializable>
-    Collection<ReferenceColumnProjection> getReferenceColumns(Class<T> referenceClass) {
+    Collection<TableColumnProjection> getReferenceColumns(Class<T> referenceClass) {
         return objectUtil.getAnnotatedProperties(referenceClass, DisplayColumn.class)
                 .stream()
                 .map(this::transformFieldToColumn)
                 .filter(Objects::nonNull)
-                .map(coreUtil.transformer(ReferenceColumnProjection.class))
+                .map(coreUtil.transformer(TableColumnProjection.class))
                 .collect(Collectors.toSet());
     }
 
@@ -273,7 +323,8 @@ public class CoreService {
         return objectUtil.getAnnotatedProperties(referenceClass, DisplayColumn.class)
                 .stream()
                 .filter(field ->
-                        field.getAnnotation(DisplayColumn.class) instanceof DisplayColumn column && column.searchable())
+                        AnnotationUtils.findAnnotation(field, DisplayColumn.class) instanceof DisplayColumn column &&
+                                column.searchable())
                 .collect(Collectors.toMap(Field::getName, f -> value));
     }
 }

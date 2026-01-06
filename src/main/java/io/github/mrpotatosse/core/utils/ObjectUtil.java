@@ -6,6 +6,8 @@ import io.github.mrpotatosse.core.resolvers.ExposedBeanResolver;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.SerializationUtils;
+import org.springframework.aop.support.AopUtils;
+import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
@@ -40,7 +42,7 @@ public class ObjectUtil {
         context.setRootObject(output);
         context.setBeanResolver(exposedBeanResolver);
 
-        Field field = ReflectionUtils.findField(source.getClass(), fieldName);
+        Field field = ReflectionUtils.findField(AopUtils.getTargetClass(source), fieldName);
         if (Objects.isNull(field))
             throw new IllegalArgumentException("Field '" + fieldName + "' not found");
 
@@ -50,7 +52,7 @@ public class ObjectUtil {
 
         Expression exp = parser.parseExpression(fieldName);
 
-        if (field.getAnnotation(RetrieveWith.class) instanceof RetrieveWith retrieveWith) {
+        if (AnnotationUtils.findAnnotation(field, RetrieveWith.class) instanceof RetrieveWith retrieveWith) {
             StandardEvaluationContext fullContext = new StandardEvaluationContext();
             fullContext.setRootObject(output);
             fullContext.setBeanResolver(allBeanResolver);
@@ -75,8 +77,10 @@ public class ObjectUtil {
     }
 
     public <A extends Annotation> A getAnnotation(Object source, Class<A> annotation) {
-        return source.getClass().isAnnotationPresent(annotation) ?
-                source.getClass().getAnnotation(annotation) : null;
+        Class<?> sourceClass = AopUtils.getTargetClass(source);
+
+        return sourceClass.isAnnotationPresent(annotation) ?
+                AnnotationUtils.findAnnotation(sourceClass, annotation) : null;
     }
 
     public <T extends Serializable, A extends Annotation>

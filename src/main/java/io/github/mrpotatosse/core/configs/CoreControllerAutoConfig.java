@@ -1,6 +1,6 @@
 package io.github.mrpotatosse.core.configs;
 
-import io.github.mrpotatosse.core.controllers.CoreReferenceDiscoveryController;
+import io.github.mrpotatosse.core.controllers.CoreDiscoveryController;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -13,11 +13,11 @@ import org.springframework.context.annotation.Configuration;
 @RequiredArgsConstructor
 public class CoreControllerAutoConfig {
     @NonNull
-    private final CoreReferenceDiscoveryController coreReferenceDiscoveryController;
+    private final CoreDiscoveryController coreDiscoveryController;
 
     @Bean
     @ConditionalOnMissingBean
-    public CoreReferenceDiscoveryController coreReferenceDiscoveryController() {
-        return coreReferenceDiscoveryController;
+    public CoreDiscoveryController coreDiscoveryController() {
+        return coreDiscoveryController;
     }
 }

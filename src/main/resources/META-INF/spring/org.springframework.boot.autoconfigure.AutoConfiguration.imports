@@ -2,3 +2,4 @@ io.github.mrpotatosse.core.configs.CoreConfig
 io.github.mrpotatosse.core.configs.WebConfig
 io.github.mrpotatosse.core.configs.PropertiesAutoConfig
 io.github.mrpotatosse.core.configs.CoreControllerAutoConfig
+io.github.mrpotatosse.core.configs.SecurityConfig

@@ -1,6 +1,6 @@
-package io.github.mrpotatosse.core.projections;
+package io.github.mrpotatosse.core.controllers.projections;
 
-public interface ReferenceColumnProjection {
+public interface TableColumnProjection {
     String getName();
 
     Integer getOrder();

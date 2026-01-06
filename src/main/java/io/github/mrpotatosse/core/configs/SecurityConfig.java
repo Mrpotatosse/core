@@ -1,10 +1,12 @@
 package io.github.mrpotatosse.core.configs;
 
 import io.github.mrpotatosse.core.converters.KeycloakJwtRolesConverter;
+import io.github.mrpotatosse.core.handlers.securities.CustomMethodSecurityExpressionHandler;
 import io.github.mrpotatosse.core.properties.SecurityProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.access.expression.method.MethodSecurityExpressionHandler;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -79,5 +81,10 @@ public class SecurityConfig {
     @Bean
     public KeycloakJwtRolesConverter keycloakJwtRolesConverter() {
         return new KeycloakJwtRolesConverter();
+    }
+
+    @Bean
+    public MethodSecurityExpressionHandler methodSecurityExpressionHandler() {
+        return new CustomMethodSecurityExpressionHandler();
     }
 }

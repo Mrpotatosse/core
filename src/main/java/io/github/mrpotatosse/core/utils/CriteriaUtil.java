@@ -68,6 +68,25 @@ public class CriteriaUtil {
         };
     }
 
+    @SafeVarargs
+    public final <T extends Serializable> Specification<T> and(Specification<T>... specs) {
+        Specification<T> result = null;
+        for (Specification<T> spec : specs) {
+            result = result == null ? spec : result.and(spec);
+        }
+        return result;
+    }
+
+    @SafeVarargs
+    public final <T extends Serializable> Specification<T> or(Specification<T>... specs) {
+        Specification<T> result = null;
+        for (Specification<T> spec : specs) {
+            result = result == null ? spec : result.or(spec);
+        }
+        return result;
+    }
+
+
     // ORDER
     /*public <T, ID extends Serializable> Specification<T> inOrderFirst(
             Function<Root<T>, Path<T>> field,
